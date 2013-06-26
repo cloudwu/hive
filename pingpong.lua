@@ -5,3 +5,8 @@ cell.command {
 		return "pong"
 	end
 }
+
+function cell.main(...)
+	print("pingpong launched")
+	return ...
+end

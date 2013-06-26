@@ -4,6 +4,7 @@ local table = table
 local next = next
 
 local command = {}
+local message = {}
 local ticker = 0
 local timer = {}
 local free_queue = {}
@@ -19,10 +20,12 @@ local function alloc_queue()
 	end
 end
 
-function command.launch(name)
+function command.launch(name, ...)
 	local c = system.launch(name .. ".lua")
 	if c then
-		return c
+		-- 4 is launch port
+		local ev = cell.event()
+		return c, cell.rawcall(c, ev, 4, cell.self, ev, true, ...)
 	else
 		error ("launch " ..  name .. " failed")
 	end
@@ -50,11 +53,13 @@ function command.timeout(n)
 	end
 end
 
+message.kill = command.kill
+
 cell.command(command)
+cell.message(message)
 
 cell.dispatch {
 	id = 0,
-	name = "ticker",
 	dispatch = function()
 		ticker = ticker + 1
 		local q = timer[ticker]
@@ -69,3 +74,16 @@ cell.dispatch {
 		table.insert(free_queue, q)
 	end
 }
+
+local function start()
+	system.init()
+	local c = system.launch("main.lua")
+	if c then
+		cell.rawsend(c, 4, nil, nil, false)
+	else
+		error ("launch main.lua failed")
+	end
+end
+
+start()
+

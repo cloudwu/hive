@@ -31,11 +31,19 @@ lkill(lua_State *L) {
 	return 0;
 }
 
+static int
+linit(lua_State *L) {
+	hive_getenv(L, "cell_pointer");
+	hive_setenv(L, "system_pointer");
+	return 0;
+}
+
 int 
 cell_system_lib(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "kill", lkill },
+		{ "init", linit },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);

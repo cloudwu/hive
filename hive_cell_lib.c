@@ -2,6 +2,7 @@
 #include "hive_env.h"
 #include "hive_seri.h"
 #include "hive_cell.h"
+#include "hive_seri.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -22,7 +23,9 @@ lsend(lua_State *L) {
 	}
 	int port = luaL_checkinteger(L,2);
 	if (lua_gettop(L) == 2) {
-		cell_send(c, port, NULL);
+		if (cell_send(c, port, NULL)) {
+			return luaL_error(L, "Cell object %p is closed",c);
+		}
 		return 0;
 	} 
 	lua_pushcfunction(L, data_pack);
@@ -30,7 +33,13 @@ lsend(lua_State *L) {
 	int n = lua_gettop(L);
 	lua_call(L, n-2, 1);
 	void * msg = lua_touserdata(L,2);
-	cell_send(c, port, msg);
+	if (cell_send(c, port, msg)) {
+		lua_pushcfunction(L, data_unpack);
+		lua_pushvalue(L,2);
+		hive_getenv(L, "cell_map");
+		lua_call(L,2,0);
+		return luaL_error(L, "Cell object %p is closed", c);
+	}
 
 	return 0;
 }

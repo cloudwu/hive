@@ -39,12 +39,12 @@ struct cell_ud {
 static int __cell =0;
 #define CELL_TAG (&__cell)
 
-static inline void
+void
 cell_grab(struct cell *c) {
 	__sync_add_and_fetch(&c->ref,1);
 }
 
-static inline void
+void
 cell_release(struct cell *c) {
 	if (__sync_sub_and_fetch(&c->ref,1) == 0) {
 		c->quit = 1;
@@ -254,7 +254,7 @@ cell_new(lua_State *L, const char * mainfile) {
 
 	err = lua_pcall(L, 0, 0, 0);
 	if (err) {
-		printf("%d : %s\n", err, lua_tostring(L,-1));
+		printf("new cell (%s) error %d : %s\n", mainfile, err, lua_tostring(L,-1));
 		lua_pop(L,1);
 		goto _error;
 	}
@@ -310,10 +310,15 @@ cell_dispatch_message(struct cell *c) {
 	return CELL_MESSAGE;
 }
 
-void 
+int 
 cell_send(struct cell *c, int port, void *msg) {
 	cell_lock(c);
+	if (c->quit || c->L == NULL) {
+		cell_unlock(c);
+		return 1;
+	}
 	struct message m = { port, msg };
 	mq_push(&c->mq, &m);
 	cell_unlock(c);
+	return 0;
 }

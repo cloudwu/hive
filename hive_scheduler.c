@@ -226,24 +226,9 @@ scheduler_start(lua_State *L) {
 	lua_pop(sL,1);
 	struct cell * sys = cell_new(sL, "system.lua");
 	if (sys == NULL) {
-		scheduler_deletetask(sL);
-		return 0;
-	}
-	lua_pushlightuserdata(L, sys);
-	hive_setenv(L, "system_pointer");
-	scheduler_starttask(sL);
-	
-	lua_getfield(L,1,"main");
-	const char * mainfile = luaL_checkstring(L, -1);
-	sL = scheduler_newtask(L);
-	void * c = cell_new(sL, mainfile);
-	if (c == NULL) {
-		cell_close(sys);
 		return 0;
 	}
 	scheduler_starttask(sL);
-	lua_pop(L,1);	// pop string mainfile
-	
 	lua_getfield(L,1, "thread");
 	int thread = luaL_optinteger(L, -1, DEFAULT_THREAD);
 	lua_pop(L,1);

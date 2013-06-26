@@ -363,6 +363,7 @@ _pack_one(lua_State *L, struct write_block *b, int index, int depth) {
 	case LUA_TUSERDATA: {
 		struct cell *c = cell_fromuserdata(L, index);
 		if (c) {
+			cell_grab(c);
 			wb_pointer(b, c, TYPE_CELL);
 			break;
 		} 
@@ -504,9 +505,12 @@ _push_value(lua_State *L, struct read_block *rb, int type, int cookie,int table_
 	case TYPE_USERDATA:
 		lua_pushlightuserdata(L,_get_pointer(L,rb));
 		break;
-	case TYPE_CELL:
-		cell_touserdata(L, table_index, _get_pointer(L,rb));
+	case TYPE_CELL: {
+		struct cell * c = _get_pointer(L,rb);
+		cell_touserdata(L, table_index, c);
+		cell_release(c);
 		break;
+	}
 	case TYPE_SHORT_STRING:
 		_get_buffer(L,rb,cookie);
 		break;
