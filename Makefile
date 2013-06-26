@@ -1,5 +1,4 @@
-LUALIB=-I/usr/local/include -L/usr/local/bin -llua52
-LUALIB_MACOSX=-I/opt/local/include -L/opt/local/lib -llua.5.2
+LUALIB_MINGW=-I/usr/local/include -L/usr/local/bin -llua52 
 SRC=hive.c \
 hive_cell.c \
 hive_seri.c \
@@ -16,13 +15,13 @@ posix : hive.so
 macosx: hive.dylib
 
 hive.so : $(SRC)
-	gcc -g -Wall --shared -fPIC -o $@ $^ $(LUALIB) -lpthread
+	gcc -g -Wall --shared -fPIC -o $@ $^ -lpthread
 
 hive.dll : $(SRC)
-	gcc -g -Wall --shared -o $@ $^ $(LUALIB) -lpthread -march=i686
+	gcc -g -Wall --shared -o $@ $^ $(LUALIB_MINGW) -lpthread -march=i686
 
 hive.dylib : $(SRC)
-	gcc -g -Wall --shared -fPIC -o $@ $^ $(LUALIB_MACOSX) -lpthread
+	gcc -g -Wall -bundle -undefined dynamic_lookup -fPIC -o $@ $^ -lpthread
 
 clean :
 	rm -rf hive.dll hive.so hive.dylib hive.dylib.dSYM
