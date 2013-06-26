@@ -16,7 +16,7 @@ posix : hive.so
 macosx: hive.dylib
 
 hive.so : $(SRC)
-	gcc -g -Wall --shared -fPIC -o $@ $^ -lpthread
+	gcc -g -Wall --shared -fPIC -o $@ $^ $(LUALIB) -lpthread
 
 hive.dll : $(SRC)
 	gcc -g -Wall --shared -o $@ $^ $(LUALIB) -lpthread -march=i686
