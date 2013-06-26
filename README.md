@@ -5,7 +5,9 @@ Parallel multiple lua states , actor model for lua.
 
 Quick Start
 ===
-make and run lua test.lua , the main logic is in main.lua
+make and run lua test.lua , the main logic is in main.lua .
+You can read this blog first (http://blog.codingnow.com/2013/06/hive_lua_actor_model.html) (In Chinese)  
+
 
 Todo
 ====
