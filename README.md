@@ -1,7 +1,7 @@
 Hive
 ====
 
-Parallel multi lua states , actor model for lua.
+Parallel multiple lua states , actor model for lua.
 
 Quick Start
 ===
