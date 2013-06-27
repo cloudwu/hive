@@ -4,6 +4,7 @@ local assert = assert
 local select = select
 local table = table
 local next = next
+local pairs = pairs
 
 local session = 0
 local port = {}
@@ -29,9 +30,10 @@ local function new_task(source, session, co, event)
 end
 
 function cell.fork(f)
-	session = session + 1
 	local co = coroutine.create(function() f() return "EXIT" end)
-	coroutine.yield("FORK", co, session)
+	session = session + 1
+	new_task(nil, nil, co, session)
+	cell.wakeup(session)
 end
 
 function cell.timeout(ti, f)
@@ -111,16 +113,13 @@ local function suspend(source, session, co, ok, op, ...)
 			-- do nothing
 		elseif op == "WAIT" then
 			new_task(source, session, co, ...)
-		elseif op == "FORK" then
-			new_task(nil, nil, ...)
-			return suspend(source, session, co, coroutine.resume(co))
 		else
 			error ("Unknown op : ".. op)
 		end
 	elseif source then
 		c.send(source, 1, session, false, op)
 	else
-		print(op)
+		print(cell.self,op)
 		print(debug.traceback(co))
 	end
 end
@@ -142,14 +141,29 @@ local function deliver_event()
 	while next(event_q1) do
 		event_q1, event_q2 = event_q2, event_q1
 		for i = 1, #event_q2 do
-			resume_co(event_q2[i])
+			local ok, err = pcall(resume_co,event_q2[i])
+			if not ok then
+				print(cell.self,err)
+			end
 			event_q2[i] = nil
 		end
-		event_q1, event_q2 = event_q2, event_q1
 	end
 end
 
 function cell.main() end
+
+cell.dispatch {
+	id = 5, -- exit
+	dispatch = function()
+		local err = tostring(cell.self) .. " is dead"
+		for event,session in pairs(task_session) do
+			local source = task_source[event]
+			if source ~= cell.self then
+				c.send(source, 1, session, false, err)
+			end
+		end
+	end
+}
 
 cell.dispatch {
 	id = 4, -- launch
@@ -205,7 +219,9 @@ cell.dispatch {
 
 cell.dispatch {
 	id = 1,	-- response
-	dispatch = resume_co,
+	dispatch = function (session, ...)
+		resume_co(session,...)
+	end,
 }
 
 c.dispatch(function(p,...)

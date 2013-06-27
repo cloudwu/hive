@@ -1,7 +1,6 @@
 local cell = require "cell"
 local system = require "cell.system"
 local table = table
-local next = next
 
 local command = {}
 local message = {}

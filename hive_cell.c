@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #define DEFAULT_QUEUE 64
 
@@ -27,9 +28,10 @@ struct message_queue {
 struct cell {
 	int lock;
 	int ref;
-	int quit;
 	lua_State *L;
 	struct message_queue mq;
+	bool quit;
+	bool close;
 };
 
 struct cell_ud {
@@ -47,7 +49,7 @@ cell_grab(struct cell *c) {
 void
 cell_release(struct cell *c) {
 	if (__sync_sub_and_fetch(&c->ref,1) == 0) {
-		c->quit = 1;
+		c->quit = true;
 	}
 }
 
@@ -165,7 +167,8 @@ cell_create() {
 	c->lock = 0;
 	c->ref = 0;
 	c->L = NULL;
-	c->quit = 0;
+	c->quit = false;
+	c->close = false;
 	mq_init(&c->mq);
 
 	return c;
@@ -217,7 +220,7 @@ lcallback(lua_State *L) {
 	}
 	
 	if (err) {
-		printf("%s\n", lua_tostring(L,-1));
+		printf("[cell %p] %s\n", lua_touserdata(L, lua_upvalueindex(5)), lua_tostring(L,-1));
 	}
 	return 0;
 }
@@ -266,7 +269,8 @@ cell_new(lua_State *L, const char * mainfile) {
 		goto _error;
 	}
 	hive_getenv(L, "cell_map");	// upvalue 4
-	lua_pushcclosure(L, lcallback, 4);
+	lua_pushlightuserdata(L, c);
+	lua_pushcclosure(L, lcallback, 5);
 	return c;
 _error:
 	scheduler_deletetask(L);
@@ -278,33 +282,60 @@ _error:
 
 void 
 cell_close(struct cell *c) {
-	lua_State *L = NULL;
 	cell_lock(c);
-	L = c->L;
-	c->L = NULL;
+	c->close = true;
 	cell_unlock(c);
-	scheduler_deletetask(L);
+}
+
+static void
+_dispatch(lua_State *L, struct message *m) {
+	lua_pushvalue(L, 1);	// dup callback
+	lua_pushinteger(L, m->port);
+	lua_pushlightuserdata(L, m->buffer);
+	lua_call(L, 2, 0);
+}
+
+static void
+trash_msg(lua_State *L, struct cell *c) {
+	// no new message in , because already set c->close
+	// don't need lock c later
+	struct message m;
+	while (!mq_pop(&c->mq, &m)) {
+		_dispatch(L, &m);
+	}
+	// HIVE_PORT 5 : exit 
+	// read cell.lua
+	m.port = 5;
+	m.buffer = NULL;
+	_dispatch(L, &m);
 }
 
 int 
 cell_dispatch_message(struct cell *c) {
 	cell_lock(c);
+	lua_State *L = c->L;
 	if (c->quit) {
 		cell_destroy(c);
 		return CELL_QUIT;
 	}
+	if (c->close && L) {
+		c->L = NULL;
+		cell_grab(c);
+		cell_unlock(c);
+		trash_msg(L,c);
+		cell_release(c);
+		scheduler_deletetask(L);
+		return CELL_EMPTY;
+	}
 	struct message m;
 	int empty = mq_pop(&c->mq, &m);
-	if (empty || c->L == NULL) {
+	if (empty || L == NULL) {
 		cell_unlock(c);
 		return CELL_EMPTY;
 	} 
 	cell_grab(c);
 	cell_unlock(c);
-	lua_pushvalue(c->L, 1);	// dup callback
-	lua_pushinteger(c->L, m.port);
-	lua_pushlightuserdata(c->L, m.buffer);
-	lua_call(c->L, 2, 0);
+	_dispatch(L,&m);
 	cell_release(c);
 
 	return CELL_MESSAGE;
@@ -313,7 +344,7 @@ cell_dispatch_message(struct cell *c) {
 int 
 cell_send(struct cell *c, int port, void *msg) {
 	cell_lock(c);
-	if (c->quit || c->L == NULL) {
+	if (c->quit || c->close) {
 		cell_unlock(c);
 		return 1;
 	}
