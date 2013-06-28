@@ -22,6 +22,7 @@ struct global_queue {
 	uint32_t head;
 	uint32_t tail;
 	int total;
+	int thread;
 	struct cell * queue[MAX_GLOBAL_MQ];
 	bool flag[MAX_GLOBAL_MQ];
 };
@@ -64,8 +65,9 @@ globalmq_pop(struct global_queue *q) {
 }
 
 static void
-globalmq_init(struct global_queue *q) {
+globalmq_init(struct global_queue *q, int thread) {
 	memset(q, 0, sizeof(*q));
+	q->thread = thread;
 }
 
 static inline void
@@ -145,7 +147,13 @@ static void *
 _worker(void *p) {
 	struct global_queue * mq = p;
 	for (;;) {
-		if (_message_dispatch(mq)) {
+		int i;
+		int n = mq->total;
+		int ret = 0;
+		for (i=0;i<n;i++) {
+			ret |= _message_dispatch(mq);
+		}
+		if (ret) {
 			usleep(1000);
 			if (mq->total <= 1)
 				return NULL;
@@ -155,7 +163,8 @@ _worker(void *p) {
 }
 
 static void
-_start(struct global_queue *gmq, int thread, struct timer *t) {
+_start(struct global_queue *gmq, struct timer *t) {
+	int thread = gmq->thread;
 	pthread_t pid[thread+1];
 	int i;
 
@@ -212,9 +221,13 @@ scheduler_starttask(lua_State *L) {
 int 
 scheduler_start(lua_State *L) {
 	luaL_checktype(L,1,LUA_TTABLE);
+	lua_getfield(L,1, "thread");
+	int thread = luaL_optinteger(L, -1, DEFAULT_THREAD);
+	lua_pop(L,1);
+
 	hive_createenv(L);
 	struct global_queue * gmq = lua_newuserdata(L, sizeof(*gmq));
-	globalmq_init(gmq);
+	globalmq_init(gmq, thread);
 
 	lua_pushvalue(L,-1);
 	hive_setenv(L, "message_queue");
@@ -229,14 +242,11 @@ scheduler_start(lua_State *L) {
 		return 0;
 	}
 	scheduler_starttask(sL);
-	lua_getfield(L,1, "thread");
-	int thread = luaL_optinteger(L, -1, DEFAULT_THREAD);
-	lua_pop(L,1);
 
 	struct timer * t = lua_newuserdata(L, sizeof(*t));
 	timer_init(t,sys,gmq);
 
-	_start(gmq,thread,t);
+	_start(gmq,t);
 	cell_close(sys);
 
 	return 0;
