@@ -7,6 +7,7 @@ local message = {}
 local ticker = 0
 local timer = {}
 local free_queue = {}
+local socket_cell = nil
 
 local function alloc_queue()
 	local n = #free_queue
@@ -19,8 +20,13 @@ local function alloc_queue()
 	end
 end
 
+function command.socket()
+	return socket_cell
+end
+
 function command.launch(name, ...)
-	local c = system.launch(name .. ".lua")
+	local fullname = assert(package.searchpath(name, package.path), "cell was not found")
+	local c = system.launch(fullname)
 	if c then
 		-- 4 is launch port
 		local ev = cell.event()
@@ -76,7 +82,13 @@ cell.dispatch {
 
 local function start()
 	system.init()
-	local c = system.launch("main.lua")
+	local socket = assert(package.searchpath("hive.socket", package.path), "socket cell was not found")
+	socket_cell = assert(system.launch(socket))
+	print("[system cell]",cell.self)
+	print("[socket cell]",socket_cell)
+	cell.rawsend(socket_cell, 4, nil, nil, false)
+
+	local c = system.launch(maincell)
 	if c then
 		cell.rawsend(c, 4, nil, nil, false)
 	else

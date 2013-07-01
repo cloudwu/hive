@@ -1,10 +1,12 @@
 local c = require "cell.c"
+local csocket = require "cell.c.socket"
 local coroutine = coroutine
 local assert = assert
 local select = select
 local table = table
 local next = next
 local pairs = pairs
+local type = type
 
 local session = 0
 local port = {}
@@ -83,7 +85,11 @@ cell.rawsend = c.send
 
 function cell.dispatch(p)
 	local id = assert(p.id)
-	assert(port[id] == nil)
+	if p.replace then
+		assert(port[id])
+	else
+		assert(port[id] == nil)
+	end
 	port[id] = p
 end
 
@@ -152,13 +158,131 @@ end
 
 function cell.main() end
 
+------------ sockets api ---------------
+local sockets = {}
+local sockets_event = {}
+local sockets_arg = {}
+local sockets_closed = {}
+local sockets_fd = nil
+
+local socket = {}
+
+local socket_meta = {
+	__index = socket,
+	__gc = function(self)
+		cell.send(sockets_fd, "disconnect", self.__fd)
+	end
+}
+
+function cell.connect(addr, port)
+	sockets_fd = sockets_fd or cell.cmd("socket")
+	local obj = { __fd = assert(cell.call(sockets_fd, "connect", self, addr, port), "Connect failed") }
+	return setmetatable(obj, socket_meta)
+end
+
+function socket:disconnect()
+	assert(sockets_fd)
+	local fd = self.__fd
+	sockets[fd] = nil
+	sockets_closed[fd] = true
+	if sockets_event[fd] then
+		cell.wakeup(sockets_event[fd])
+	end
+	cell.send(sockets_fd, "disconnect", fd)
+end
+
+function socket:write(msg)
+	local fd = self.__fd
+	cell.rawsend(sockets_fd, 6, fd, csocket.sendpack(msg))
+end
+
+local function socket_wait(fd, sep)
+	assert(sockets_event[fd] == nil)
+	sockets_event[fd] = cell.event()
+	sockets_arg[fd] = sep
+	cell.wait(sockets_event[fd])
+end
+
+function socket:readbytes(bytes)
+	local fd = self.__fd
+	if sockets_closed[fd] then
+		sockets[fd] = nil
+		return
+	end
+	if sockets[fd] then
+		local data = csocket.pop(sockets[fd], bytes)
+		if data then
+			return data
+		end
+	end
+	socket_wait(fd, bytes)
+	if sockets_closed[fd] then
+		sockets[fd] = nil
+		return
+	end
+	return csocket.pop(sockets[fd], bytes)
+end
+
+function socket:readline(sep)
+	local fd = self.__fd
+	if sockets_closed[fd] then
+		sockets[fd] = nil
+		return
+	end
+	sep = sep or "\n"
+	if sockets[fd] then
+		local line = csocket.readline(sockets[fd], sep)
+		if line then
+			return line
+		end
+	end
+	socket_wait(fd, sep)
+	if sockets_closed[fd] then
+		sockets[fd] = nil
+		return
+	end
+	return csocket.readline(sockets[fd], sep)
+end
+
+----------------------------------------
+
+cell.dispatch {
+	id = 6, -- socket
+	dispatch = function(fd, sz, msg)
+		local ev = sockets_event[fd]
+		sockets_event[fd] = nil
+		if sz == 0 then
+			sockets_closed[fd] = true
+			if ev then
+				cell.wakeup(ev)
+			end
+		else
+			local buffer, bsz = csocket.push(sockets[fd], msg, sz)
+			sockets[fd] = buffer
+			if ev then
+				local arg = sockets_arg[fd]
+				if type(arg) == "string" then
+					local line = csocket.readline(buffer, arg, true)
+					if line then
+						cell.wakeup(ev)
+					end
+				else
+					if bsz >= arg then
+						cell.wakeup(ev)
+					end
+				end
+			end
+		end
+	end
+}
+
 cell.dispatch {
 	id = 5, -- exit
 	dispatch = function()
-		local err = tostring(cell.self) .. " is dead"
+		local err = tostring(self) .. " is dead"
 		for event,session in pairs(task_session) do
 			local source = task_source[event]
-			if source ~= cell.self then
+			if source ~= self then
 				c.send(source, 1, session, false, err)
 			end
 		end

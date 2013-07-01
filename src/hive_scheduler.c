@@ -221,6 +221,8 @@ scheduler_starttask(lua_State *L) {
 int 
 scheduler_start(lua_State *L) {
 	luaL_checktype(L,1,LUA_TTABLE);
+	const char * system_lua = luaL_checkstring(L,2);
+	const char * main_lua = luaL_checkstring(L,3);
 	lua_getfield(L,1, "thread");
 	int thread = luaL_optinteger(L, -1, DEFAULT_THREAD);
 	lua_pop(L,1);
@@ -237,7 +239,11 @@ scheduler_start(lua_State *L) {
 	sL = scheduler_newtask(L);
 	luaL_requiref(sL, "cell.system", cell_system_lib, 0);
 	lua_pop(sL,1);
-	struct cell * sys = cell_new(sL, "system.lua");
+
+	lua_pushstring(sL, main_lua);
+	lua_setglobal(sL, "maincell");
+
+	struct cell * sys = cell_new(sL, system_lua);
 	if (sys == NULL) {
 		return 0;
 	}

@@ -5,6 +5,7 @@
 #include "hive_cell_lib.h"
 #include "hive_seri.h"
 #include "hive_scheduler.h"
+#include "hive_socket_lib.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -227,6 +228,8 @@ lcallback(lua_State *L) {
 
 struct cell *
 cell_new(lua_State *L, const char * mainfile) {
+	luaL_requiref(L, "cell.c.socket", socket_lib, 0);
+	lua_pop(L,1);
 	hive_getenv(L, "cell_map");
 	int cell_map = lua_absindex(L,-1);	// cell_map
 	luaL_requiref(L, "cell.c", cell_lib, 0);	// cell_map cell_lib
@@ -247,7 +250,7 @@ cell_new(lua_State *L, const char * mainfile) {
 	lua_pop(L,2);
 	lua_pushlightuserdata(L, c);
 	hive_setenv(L, "cell_pointer");
-	
+
 	int err = luaL_loadfile(L, mainfile);
 	if (err) {
 		printf("%d : %s\n", err, lua_tostring(L,-1));
