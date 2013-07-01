@@ -3,6 +3,7 @@
 
 #include <netdb.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/time.h>
 #include <sys/event.h>
 
@@ -47,7 +48,7 @@ sp_write(int kfd, int sock, void *ud, bool enable) {
 }
 
 static int 
-event_wait(int kfd, struct event *e, int max, int timeout) {
+sp_wait(int kfd, struct event *e, int max, int timeout) {
 	struct timespec timeoutspec;
 	timeoutspec.tv_sec = timeout / 1000;
 	timeoutspec.tv_nsec = (timeout % 1000) * 1000000;
