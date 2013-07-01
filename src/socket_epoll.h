@@ -4,6 +4,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <sys/epoll.h>
+#include <fcntl.h>
 
 static bool 
 sp_invalid(int efd) {
@@ -46,7 +47,7 @@ sp_write(int efd, int sock, void *ud, bool enable) {
 }
 
 static int 
-event_wait(int efd, struct event *e, int max, int timeout) {
+sp_wait(int efd, struct event *e, int max, int timeout) {
 	struct epoll_event ev[max];
 	int n = epoll_wait(efd , ev, max, timeout);
 	int i;
