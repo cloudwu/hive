@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <sys/event.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 static bool 
 sp_invalid(int kfd) {

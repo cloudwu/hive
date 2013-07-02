@@ -14,6 +14,7 @@
 #define DEFAULT_SOCKET 128
 #define READ_BUFFER 4000
 #define MAX_EVENT 32
+#define BACKLOG 32
 
 #define STATUS_INVALID 0
 #define STATUS_HALFCLOSE 1
@@ -29,7 +30,8 @@ struct write_buffer {
 struct socket {
 	int fd;
 	int id;
-	int status;
+	short status;
+	short listen;
 	struct write_buffer * head;
 	struct write_buffer * tail;
 };
@@ -131,6 +133,7 @@ new_socket(struct socket_pool *p, int sock) {
 				goto _error;
 			}
 			s->status = STATUS_SUSPEND;
+			s->listen = 0;
 			sp_nonblocking(sock);
 			int keepalive = 1; 
 			setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive , sizeof(keepalive));
@@ -304,6 +307,32 @@ push_result(lua_State *L, int idx, struct socket *s, struct socket_pool *p) {
 	}
 }
 
+static int
+accept_result(lua_State *L, int idx, struct socket *s, struct socket_pool *p) {
+	int ret = 0;
+	for (;;) {
+		struct sockaddr_in remote_addr;
+		socklen_t len = sizeof(struct sockaddr_in);
+		int client_fd = accept(s->fd , (struct sockaddr *)&remote_addr ,  &len);
+		if (client_fd < 0)
+			return ret;
+		int id = new_socket(p, client_fd);
+		if (id < 0) {
+			return ret;
+		}
+
+		result_n(L, idx);
+		++ret;
+		++idx;
+		lua_pushinteger(L, s->id);
+		lua_rawseti(L, -2, 1);
+		lua_pushinteger(L, id);
+		lua_rawseti(L, -2, 2);
+		lua_pushstring(L, inet_ntoa(remote_addr.sin_addr));
+		lua_rawseti(L, -2, 3);
+	}
+}
+
 static void
 sendout(struct socket_pool *p, struct socket *s) {
 	while (s->head) {
@@ -357,7 +386,12 @@ lpoll(lua_State *L) {
 	for (i=0;i<n;i++) {
 		struct event *e = &p->ev[i];
 		if (e->read) {
-			t += push_result(L, t, e->s, p);
+			struct socket * s= e->s;
+			if (s->listen) {
+				t += accept_result(L, t, e->s, p);
+			} else {
+				t += push_result(L, t, e->s, p);
+			}
 		}
 		if (e->write) {
 			struct socket *s = e->s;
@@ -653,6 +687,61 @@ lfreepack(lua_State *L) {
 	return 0;
 }
 
+// server support
+
+static int
+llisten(lua_State *L) {
+	struct socket_pool * p = get_sp(L);
+	// only support ipv4
+	int port = 0;
+	size_t len = 0;
+	const char * name = luaL_checklstring(L, 1, &len);
+	char binding[len+1];
+	memcpy(binding, name, len+1);
+	char * portstr = strchr(binding,':');
+	uint32_t addr = INADDR_ANY;
+	if (portstr == NULL) {
+		port = strtol(binding, NULL, 10);
+		if (port <= 0) {
+			return luaL_error(L, "Invalid address %s", name);
+		}
+	} else {
+		port = strtol(portstr + 1, NULL, 10);
+		if (port <= 0) {
+			return luaL_error(L, "Invalid address %s", name);
+		}
+		portstr[0] = '\0';
+		addr=inet_addr(binding);
+	}
+	int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+	int id = new_socket(p, listen_fd);
+	if (id < 0) {
+		return luaL_error(L, "Create socket %s failed", name);
+	}
+	struct socket * s = p->s[id % p->cap];
+	s->listen = 1;
+	int reuse = 1;
+	setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&reuse, sizeof(int));
+
+	struct sockaddr_in my_addr;
+	memset(&my_addr, 0, sizeof(struct sockaddr_in));
+	my_addr.sin_family = AF_INET;
+	my_addr.sin_port = htons(port);
+	my_addr.sin_addr.s_addr = addr;
+	if (bind(listen_fd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) == -1) {
+		force_close(s,p);
+		return luaL_error(L, "Bind %s failed", name);
+	}
+	if (listen(listen_fd, BACKLOG) == -1) {
+		force_close(s,p);
+		return luaL_error(L, "Listen %s failed", name);
+	}
+
+	lua_pushinteger(L, id);
+
+	return 1;
+}
+
 int 
 socket_lib(lua_State *L) {
 	luaL_checkversion(L);
@@ -667,6 +756,7 @@ socket_lib(lua_State *L) {
 		{ "push", lpush },
 		{ "pop", lpop },
 		{ "readline", lreadline },
+		{ "listen", llisten },
 		{ NULL, NULL },
 	};
 	luaL_newlibtable(L,l);

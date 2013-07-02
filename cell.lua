@@ -164,19 +164,49 @@ local sockets_event = {}
 local sockets_arg = {}
 local sockets_closed = {}
 local sockets_fd = nil
+local sockets_accept = {}
 
 local socket = {}
+local listen_socket = {}
+
+local function close_msg(self)
+	cell.send(sockets_fd, "disconnect", self.__fd)
+end
 
 local socket_meta = {
 	__index = socket,
-	__gc = function(self)
-		cell.send(sockets_fd, "disconnect", self.__fd)
-	end
+	__gc = close_msg,
 }
+
+local listen_meta = {
+	__index = listen_socket,
+	__gc = close_msg,
+}
+
+
+--todo:
+function listen_socket:disconnect()
+	sockets_accept[self.__fd] = nil
+	socket.disconnect(self)
+end
 
 function cell.connect(addr, port)
 	sockets_fd = sockets_fd or cell.cmd("socket")
 	local obj = { __fd = assert(cell.call(sockets_fd, "connect", self, addr, port), "Connect failed") }
+	return setmetatable(obj, socket_meta)
+end
+
+function cell.listen(port, accepter)
+	assert(type(accepter) == "function")
+	sockets_fd = sockets_fd or cell.cmd("socket")
+	local obj = { __fd = assert(cell.call(sockets_fd, "listen", self, port), "Listen failed") }
+	sockets_accept[obj.__fd] = accepter
+	return setmetatable(obj, listen_meta)
+end
+
+function cell.bind(fd)
+	sockets_fd = sockets_fd or cell.cmd("socket")
+	local obj = { __fd = fd }
 	return setmetatable(obj, socket_meta)
 end
 
@@ -249,6 +279,17 @@ end
 cell.dispatch {
 	id = 6, -- socket
 	dispatch = function(fd, sz, msg)
+		local accepter = sockets_accept[fd]
+		if accepter then
+			-- accepter: new fd (sz) ,  ip addr (msg)
+			local co = coroutine.create(function()
+				local forward = accepter(sz,msg) or self
+				cell.call(sockets_fd, "forward", sz , forward)
+				return "EXIT"
+			end)
+			suspend(nil, nil, co, coroutine.resume(co))
+			return
+		end
 		local ev = sockets_event[fd]
 		sockets_event[fd] = nil
 		if sz == 0 then
@@ -292,10 +333,9 @@ cell.dispatch {
 cell.dispatch {
 	id = 4, -- launch
 	dispatch = function(source, session, report, ...)
-		local args = { ... }
 		local op = report and "RETURN" or "EXIT"
-		local co = coroutine.create(function() return op, cell.main(table.unpack(args)) end)
-		suspend(source, session, co, coroutine.resume(co))
+		local co = coroutine.create(function(...) return op, cell.main(...) end)
+		suspend(source, session, co, coroutine.resume(co,...))
 	end
 }
 
@@ -307,15 +347,8 @@ cell.dispatch {
 			print("Unknown message ", cmd)
 		else
 			local n = select("#", ...)
-			local co
-			if n < 5 then
-				local p1,p2,p3,p4 = ...
-				co = coroutine.create(function() return "EXIT", f(p1,p2,p3,p4) end)
-			else
-				local args = { ... }
-				co = coroutine.create(function() return "EXIT", f(table.unpack(args)) end)
-			end
-			suspend(source, session, co, coroutine.resume(co))
+			local co = coroutine.create(function(...) return "EXIT", f(...) end)
+			suspend(source, session, co, coroutine.resume(co,...))
 		end
 	end
 }
@@ -328,15 +361,8 @@ cell.dispatch {
 			c.send(source, 1, session, false, "Unknown command " ..  cmd)
 		else
 			local n = select("#", ...)
-			local co
-			if n < 5 then
-				local p1,p2,p3,p4 = ...
-				co = coroutine.create(function() return "RETURN", f(p1,p2,p3,p4) end)
-			else
-				local args = { ... }
-				co = coroutine.create(function() return "RETURN", f(table.unpack(args)) end)
-			end
-			suspend(source, session, co, coroutine.resume(co))
+			local co = coroutine.create(function(...) return "RETURN", f(...) end)
+			suspend(source, session, co, coroutine.resume(co, ...))
 		end
 	end
 }

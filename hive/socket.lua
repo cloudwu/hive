@@ -11,13 +11,37 @@ function command.connect(source,addr,port)
 	local fd = csocket.connect(addr, port)
 	if fd then
 		sockets[fd] = source
+		return fd
 	end
-	return fd
+end
+
+function command.listen(source, port)
+	local fd = csocket.listen(port)
+	if fd then
+		sockets[fd] = source
+		return fd
+	end
+end
+
+function command.forward(fd, addr)
+	local data = sockets[fd]
+	sockets[fd] = addr
+	if type(data) == "table" then
+		for i=1,#data do
+			local v = data[i]
+			if not pcall(cell.rawsend, addr, 6, v[1], v[2], v[3]) then
+				csocket.freepack(v[3])
+				message.disconnect(v[1])
+			end
+		end
+	end
 end
 
 function message.disconnect(fd)
-	sockets[fd] = nil
-	csocket.close(fd)
+	if sockets[fd] then
+		sockets[fd] = nil
+		csocket.close(fd)
+	end
 end
 
 cell.command(command)
@@ -35,7 +59,22 @@ function cell.main()
 			local v = result[i]
 			local c = sockets[v[1]]
 			if c then
-				cell.rawsend(c, 6, v[1], v[2], v[3])
+				if type(v[3]) == "string" then
+					-- accept: listen fd, new fd , ip
+					if not pcall(cell.rawsend,c, 6, v[1], v[2], v[3]) then
+						message.disconnect(v[1])
+					else
+						sockets[v[2]] = {}
+					end
+				elseif type(c) == "table" then
+					table.insert(c, v)
+				else
+					-- forward: fd , size , message
+					if not pcall(cell.rawsend,c, 6, v[1], v[2], v[3]) then
+						csocket.freepack(v[3])
+						message.disconnect(v[1])
+					end
+				end
 			else
 				csocket.freepack(v[3])
 			end

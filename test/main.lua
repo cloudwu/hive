@@ -1,7 +1,15 @@
 local cell = require "cell"
 
+local function accepter(fd, addr)
+	-- can't read fd in this function, because socket.cell haven't forward data from fd
+	local client = cell.cmd("launch", "test.client",fd, addr)
+	-- return cell the data from fd will forward to, you can also return nil for forwarding to self
+	return client
+end
+
 function cell.main()
 	print("[cell main]",cell.self)
+	cell.listen("127.0.0.1:8888",accepter)
 --[[ socket api
 	local sock = cell.connect("localhost", 8888)
 	local line = sock:readline(fd)
