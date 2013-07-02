@@ -3,7 +3,7 @@
 #include "hive_scheduler.h"
 
 int
-luaopen_hive_c(lua_State *L) {
+luaopen_hive_core(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "start", scheduler_start },
 		{ NULL, NULL },

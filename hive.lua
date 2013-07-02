@@ -1,4 +1,4 @@
-local c = require "hive.c"
+local c = require "hive.core"
 
 local system_cell = assert(package.searchpath("hive.system", package.path),"system cell was not found")
 
