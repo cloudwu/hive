@@ -12,18 +12,18 @@ src/hive_socket_lib.c
 all :
 	echo 'make win or make posix or make macosx'
 
-win : hive.dll
-posix : hive.so
-macosx: hive.dylib
+win : hive/core.dll
+posix : hive/core.so
+macosx: hive/core.dylib
 
-hive.so : $(SRC)
+hive/core.so : $(SRC)
 	gcc -g -Wall --shared -fPIC -o $@ $^ -lpthread
 
-hive.dll : $(SRC)
+hive/core.dll : $(SRC)
 	gcc -g -Wall --shared -o $@ $^ $(LUALIB_MINGW) -lpthread -march=i686 -lws2_32
 
-hive.dylib : $(SRC)
+hive/core.dylib : $(SRC)
 	gcc -g -Wall -bundle -undefined dynamic_lookup -fPIC -o $@ $^ -lpthread
 
 clean :
-	rm -rf hive.dll hive.so hive.dylib hive.dylib.dSYM
+	rm -rf hive/core.dll hive/core.so hive/core.dylib hive/core.dylib.dSYM

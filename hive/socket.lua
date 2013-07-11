@@ -67,7 +67,7 @@ function cell.main()
 						sockets[v[2]] = {}
 					end
 				elseif type(c) == "table" then
-					table.insert(c, v)
+					table.insert(c, {v[1],v[2],v[3]})
 				else
 					-- forward: fd , size , message
 					if not pcall(cell.rawsend,c, 6, v[1], v[2], v[3]) then
