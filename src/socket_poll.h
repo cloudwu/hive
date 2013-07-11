@@ -29,6 +29,7 @@ struct event {
 };
 
 static bool sp_invalid(poll_fd fd);
+static poll_fd sp_init();
 static poll_fd sp_create();
 static poll_fd sp_release(poll_fd fd);
 static int sp_add(poll_fd fd, int sock, void *ud);

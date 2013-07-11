@@ -4,6 +4,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/event.h>
 #include <netinet/in.h>
@@ -15,7 +16,13 @@ sp_invalid(int kfd) {
 }
 
 static int
+sp_init() {
+	return -1;
+}
+
+static int
 sp_create() {
+	signal(SIGPIPE, SIG_IGN);
 	return kqueue();
 }
 

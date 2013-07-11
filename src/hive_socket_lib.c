@@ -301,6 +301,7 @@ push_result(lua_State *L, int idx, struct socket *s, struct socket_pool *p) {
 			lua_rawseti(L, -2, 2);
 			lua_pushlightuserdata(L, buffer);
 			lua_rawseti(L, -2, 3);
+			lua_pop(L,1);
 		}
 		if (r < READ_BUFFER)
 			return ret;
@@ -314,8 +315,9 @@ accept_result(lua_State *L, int idx, struct socket *s, struct socket_pool *p) {
 		struct sockaddr_in remote_addr;
 		socklen_t len = sizeof(struct sockaddr_in);
 		int client_fd = accept(s->fd , (struct sockaddr *)&remote_addr ,  &len);
-		if (client_fd < 0)
+		if (client_fd < 0) {
 			return ret;
+		}
 		int id = new_socket(p, client_fd);
 		if (id < 0) {
 			return ret;
@@ -330,6 +332,7 @@ accept_result(lua_State *L, int idx, struct socket *s, struct socket_pool *p) {
 		lua_rawseti(L, -2, 2);
 		lua_pushstring(L, inet_ntoa(remote_addr.sin_addr));
 		lua_rawseti(L, -2, 3);
+		lua_pop(L,1);
 	}
 }
 
@@ -421,7 +424,8 @@ lsend(lua_State *L) {
 	}
 	if (s->status != STATUS_SUSPEND) {
 		free(msg);
-		return luaL_error(L,"Write to closed socket %d", id);
+//		return luaL_error(L,"Write to closed socket %d", id);
+		return 0;
 	}
 	if (s->head) {
 		struct write_buffer * buf = malloc(sizeof(*buf));
@@ -547,7 +551,6 @@ lpush(lua_State *L) {
 		append_buffer(buffer, msg, sz);
 	}
 	lua_pushinteger(L, sz + bytes);
-
 	free(msg);
 	return 2;
 }
@@ -762,6 +765,7 @@ socket_lib(lua_State *L) {
 	luaL_newlibtable(L,l);
 	struct socket_pool *sp = lua_newuserdata(L, sizeof(*sp));
 	memset(sp, 0, sizeof(*sp));
+	sp->fd = sp_init();
 	lua_newtable(L);
 	lua_pushcfunction(L, lexit);
 	lua_setfield(L, -2, "__gc");

@@ -1,4 +1,5 @@
 local cell = require "cell"
+local listen_fd
 
 local function accepter(fd, addr)
 	-- can't read fd in this function, because socket.cell haven't forward data from fd
@@ -9,7 +10,8 @@ end
 
 function cell.main()
 	print("[cell main]",cell.self)
-	cell.listen("127.0.0.1:8888",accepter)
+	-- save listen_fd for prevent gc.
+	listen_fd = cell.listen("127.0.0.1:8888",accepter)
 --[[ socket api
 	local sock = cell.connect("localhost", 8888)
 	local line = sock:readline(fd)

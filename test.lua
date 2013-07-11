@@ -6,3 +6,4 @@ hive.start {
 	thread = 4,
 	main = "test.main",
 }
+

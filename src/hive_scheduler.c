@@ -151,7 +151,7 @@ _worker(void *p) {
 		int n = mq->total;
 		int ret = 0;
 		for (i=0;i<n;i++) {
-			ret |= _message_dispatch(mq);
+			ret &= _message_dispatch(mq);
 		}
 		if (ret) {
 			usleep(1000);

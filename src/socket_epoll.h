@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
 
 static bool 
 sp_invalid(int efd) {
@@ -14,7 +15,13 @@ sp_invalid(int efd) {
 }
 
 static int
+sp_init() {
+	return -1;
+}
+
+static int
 sp_create() {
+	signal(SIGPIPE, SIG_IGN);
 	return epoll_create(1024);
 }
 

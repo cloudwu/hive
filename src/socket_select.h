@@ -39,6 +39,11 @@ sp_invalid(struct select_pool *sp) {
 }
 
 static struct select_pool *
+sp_init() {
+	return NULL;
+}
+
+static struct select_pool *
 sp_create() {
 	struct select_pool * sp = malloc(sizeof(*sp));
 	sp->cap = DEFAULT_CAP;
