@@ -149,7 +149,7 @@ _worker(void *p) {
 	for (;;) {
 		int i;
 		int n = mq->total;
-		int ret = 0;
+		int ret = 1;
 		for (i=0;i<n;i++) {
 			ret &= _message_dispatch(mq);
 		}
