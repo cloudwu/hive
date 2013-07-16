@@ -22,7 +22,7 @@ hive_setenv(lua_State *L, const char * key) {
 	lua_rawgetp(L, LUA_REGISTRYINDEX, HIVE_TAG);
 	lua_insert(L, -2);
 	lua_setfield(L, -2, key);
-	lua_replace(L, -2);
+	lua_pop(L,1);
 }
 
 void *
