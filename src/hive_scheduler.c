@@ -91,6 +91,7 @@ _message_dispatch(struct global_queue *q) {
 	case CELL_MESSAGE:
 		break;
 	case CELL_QUIT:
+		globalmq_dec(q);
 		return 1;
 	}
 	globalmq_push(q, c);
@@ -152,6 +153,9 @@ _worker(void *p) {
 		int ret = 1;
 		for (i=0;i<n;i++) {
 			ret &= _message_dispatch(mq);
+			if (n < mq->total) {
+				n = mq->total;
+			}
 		}
 		if (ret) {
 			usleep(1000);
@@ -201,9 +205,6 @@ scheduler_newtask(lua_State *pL) {
 
 void
 scheduler_deletetask(lua_State *L) {
-	hive_getenv(L, "message_queue");
-	struct global_queue *mq = lua_touserdata(L, -1);
-	globalmq_dec(mq);
 	lua_close(L);
 }
 
