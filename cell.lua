@@ -300,11 +300,12 @@ cell.dispatch {
 			return
 		end
 		local ev = sockets_event[fd]
-		sockets_event[fd] = nil
+		--sockets_event[fd] = nil
 		if sz == 0 then
 			sockets_closed[fd] = true
 			if ev then
 				cell.wakeup(ev)
+				sockets_event[fd] = nil
 			end
 		else
 			local buffer, bsz = csocket.push(sockets[fd], msg, sz)
@@ -315,10 +316,12 @@ cell.dispatch {
 					local line = csocket.readline(buffer, arg, true)
 					if line then
 						cell.wakeup(ev)
+						sockets_event[fd] = nil
 					end
 				else
 					if bsz >= arg then
 						cell.wakeup(ev)
+						sockets_event[fd] = nil
 					end
 				end
 			end
