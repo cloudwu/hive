@@ -614,7 +614,7 @@ check_sep(struct socket_buffer *buffer, int from, const char * sep, int sz) {
 	for (i=0;i<sz;i++) {
 		int index = from + i;
 		if (index >= buffer->size) {
-			index = 0;
+			index %= buffer->size;
 		}
 		if (ptr[index] != sep[i]) {
 			return 0;
